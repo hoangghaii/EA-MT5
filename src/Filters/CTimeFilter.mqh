@@ -15,7 +15,9 @@ public:
 //--- Return false on Monday (1) and Friday (5); use TimeGMT() for broker-TZ safety
 bool CTimeFilter::IsAllowed()
 {
-   int dow = TimeDayOfWeek(TimeGMT());
+   MqlDateTime dt;
+   TimeToStruct(TimeGMT(), dt);
+   int dow = dt.day_of_week;
    if(dow == 1 || dow == 5)
    {
       // Uncomment for debug: Print("CTimeFilter: blocked day=", dow);

@@ -34,7 +34,9 @@ void CDrawdownFilter::Init(CRiskManager* risk)
 //--- Return 0/1/2 for Asia/London/NY based on GMT hour
 int CDrawdownFilter::_session()
 {
-   int hour = TimeHour(TimeGMT());
+   MqlDateTime dt;
+   TimeToStruct(TimeGMT(), dt);
+   int hour = dt.hour;
    if(hour < 8)  return 0; // Asia    00:00-08:00 GMT
    if(hour < 16) return 1; // London  08:00-16:00 GMT
    return 2;               // New York 16:00-24:00 GMT
