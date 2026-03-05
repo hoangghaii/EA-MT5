@@ -12,8 +12,7 @@ private:
    CTrade  m_trade;
    string  m_symbol;
    double  m_lotSize;
-   int     m_slPips;
-   int     m_tpPips;
+   int     m_slPips; // TP = slPips * 2 (RR 1:2)
 
 public:
    void Init(string symbol, ulong magic);
@@ -27,8 +26,7 @@ void CTradeManager::Init(string symbol, ulong magic)
 {
    m_symbol  = symbol;
    m_lotSize = 0.01;
-   m_slPips  = 25;
-   m_tpPips  = 50;
+   m_slPips  = 25; // TP auto = 50 (RR 1:2)
 
    m_trade.SetExpertMagicNumber(magic);
    m_trade.SetDeviationInPoints(10);
@@ -47,7 +45,7 @@ bool CTradeManager::OpenBuy()
 {
    double ask = SymbolInfoDouble(m_symbol, SYMBOL_ASK);
    double sl  = ask - m_slPips * _Point;
-   double tp  = ask + m_tpPips * _Point;
+   double tp  = ask + m_slPips * _Point * 2; // RR 1:2
 
    if(!m_trade.Buy(m_lotSize, m_symbol, ask, sl, tp, "XAUUSD Scalper"))
    {
@@ -63,7 +61,7 @@ bool CTradeManager::OpenSell()
 {
    double bid = SymbolInfoDouble(m_symbol, SYMBOL_BID);
    double sl  = bid + m_slPips * _Point;
-   double tp  = bid - m_tpPips * _Point;
+   double tp  = bid - m_slPips * _Point * 2; // RR 1:2
 
    if(!m_trade.Sell(m_lotSize, m_symbol, bid, sl, tp, "XAUUSD Scalper"))
    {

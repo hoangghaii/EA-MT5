@@ -103,13 +103,6 @@ void OnTick()
       return;
    }
 
-   // Single position gate
-   if(g_tradeManager.HasOpenPosition())
-   {
-      g_panel.UpdateStatus(StringFormat("IN TRADE | losses:%d", g_riskManager.GetConsecutiveLosses()));
-      return;
-   }
-
    // Signal evaluation and execution
    int signal = g_signalEngine.CheckSignal();
    g_panel.UpdateStatus(StringFormat("ACTIVE | losses:%d", g_riskManager.GetConsecutiveLosses()));
