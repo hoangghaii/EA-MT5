@@ -10,7 +10,9 @@
 #include "Backtest/CMetricsEngine.mqh"  // includes CBacktester.mqh transitively
 
 input int    InpBarsBack  = 20000;                    // Bars to replay
-input double InpRR        = 2.0;                      // Risk-Reward ratio (TP = SL × RR)
+input double InpLotSize   = 0.01;                     // Lot size per trade
+input double InpRR        = 3.0;                      // Risk-Reward ratio (TP = SL × RR)
+input bool   InpBEStop    = true;                     // Break-even stop at 1:1 level
 input string InpCsvFile   = "xauusd_backtest.csv";   // CSV output filename
 
 CBacktester   g_bt;
@@ -25,7 +27,9 @@ int OnInit()
       return INIT_FAILED;
    }
 
+   g_bt.SetLot(InpLotSize);
    g_bt.SetRR(InpRR);
+   g_bt.SetBEStop(InpBEStop);
    int n = g_bt.Run();
    if(n == 0)
    {

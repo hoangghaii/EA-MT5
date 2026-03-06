@@ -29,6 +29,8 @@ private:
    int          m_consecLosses;
    int          m_pausedSession; // -1 = not paused
    double       m_rr;           // Risk-Reward ratio (TP = SL × m_rr)
+   double       m_lot;          // Lot size per trade
+   bool         m_beStop;       // Break-even stop: move SL to entry at 1:1
 
    // Signal diagnostic counters (reset each Run())
    int          m_dBuf;   // CopyBuffer failed
@@ -47,7 +49,9 @@ private:
 
 public:
    bool Init(string symbol, int barsBack);
-   void SetRR(double rr) { m_rr = (rr > 0.1) ? rr : 2.0; }
+   void SetRR(double rr)     { m_rr     = (rr  > 0.1)  ? rr  : 2.0;  }
+   void SetLot(double lot)   { m_lot    = (lot > 0.001) ? lot : 0.01; }
+   void SetBEStop(bool b)    { m_beStop = b; }
    void Deinit();
    int  Run();
    bool GetTrade(int idx, VirtualTrade &t);
@@ -63,7 +67,9 @@ bool CBacktester::Init(string symbol, int barsBack)
    m_tradeCount    = 0;
    m_consecLosses  = 0;
    m_pausedSession = -1;
-   m_rr            = 2.0; // default RR; override with SetRR() before Run()
+   m_rr            = 2.0;   // default RR; override with SetRR() before Run()
+   m_lot           = 0.01;  // default lot; override with SetLot() before Run()
+   m_beStop        = false; // default: no break-even stop
 
    // Wait for M3 history to be available from broker (up to 10s)
    int copied = 0;

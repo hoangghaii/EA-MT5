@@ -86,18 +86,36 @@ double CBacktester::_calcPnL(int dir, double entry, double ex)
    double tVal = SymbolInfoDouble(m_symbol, SYMBOL_TRADE_TICK_VALUE);
    double tSz  = SymbolInfoDouble(m_symbol, SYMBOL_TRADE_TICK_SIZE);
    if(tSz <= 0.0) return 0.0;
-   return (ex - entry) * dir * BT_LOT * (tVal / tSz);
+   return (ex - entry) * dir * m_lot * (tVal / tSz);
 }
 
-//--- Exit detection: TP takes priority over SL when both hit same bar
+//--- Exit detection: TP > SL priority; break-even stop applied if enabled
 bool CBacktester::_detectExit(VirtualTrade &t, int idx)
 {
    double hi = m_ratesM3[idx].high;
    double lo = m_ratesM3[idx].low;
+
+   // Break-even: once price reaches 1:1 level, slide SL to entry (only once)
+   if(m_beStop)
+   {
+      double slDist = MathAbs(t.tp - t.entry_price) / m_rr; // 1 × SL distance
+      double beLvl  = t.entry_price + t.direction * slDist;
+      bool   beHit  = (t.direction == +1) ? (hi >= beLvl) : (lo <= beLvl);
+      // Only move if SL still at original loss-side (haven't moved yet)
+      bool   notMoved = (t.direction == +1) ? (t.sl < t.entry_price - _Point * 0.5)
+                                            : (t.sl > t.entry_price + _Point * 0.5);
+      if(beHit && notMoved) t.sl = t.entry_price;
+   }
+
    bool tpHit = (t.direction == +1) ? (hi >= t.tp) : (lo <= t.tp);
    bool slHit = (t.direction == +1) ? (lo <= t.sl) : (hi >= t.sl);
    if(tpHit) { t.exit_price = t.tp; t.exit_reason = "TP"; return true; }
-   if(slHit) { t.exit_price = t.sl; t.exit_reason = "SL"; return true; }
+   if(slHit)
+   {
+      t.exit_price  = t.sl;
+      t.exit_reason = (MathAbs(t.sl - t.entry_price) < _Point) ? "BE" : "SL";
+      return true;
+   }
    return false;
 }
 //+------------------------------------------------------------------+

@@ -101,9 +101,10 @@ void CMetricsEngine::Process(VirtualTrade &trades[], int count)
       m_totalPnL += pnl;
       equity     += pnl;
       m_tradeCount++;
-      if(pnl > 0.0) { wins++; grossWin  += pnl; consec = 0; }
-      else          { grossLoss += MathAbs(pnl); consec++;
-                      if(consec > maxConsec) maxConsec = consec; }
+      if(pnl > 0.0)                           { wins++; grossWin  += pnl; consec = 0; }
+      else if(trades[i].exit_reason == "BE")  { consec = 0; } // break-even: not a loss
+      else                                    { grossLoss += MathAbs(pnl); consec++;
+                                                if(consec > maxConsec) maxConsec = consec; }
       if(equity > peak) peak = equity;
       if(peak > 0.0)
       {
