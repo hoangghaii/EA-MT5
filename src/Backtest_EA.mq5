@@ -10,6 +10,7 @@
 #include "Backtest/CMetricsEngine.mqh"  // includes CBacktester.mqh transitively
 
 input int    InpBarsBack  = 20000;                    // Bars to replay
+input double InpRR        = 2.0;                      // Risk-Reward ratio (TP = SL × RR)
 input string InpCsvFile   = "xauusd_backtest.csv";   // CSV output filename
 
 CBacktester   g_bt;
@@ -24,6 +25,7 @@ int OnInit()
       return INIT_FAILED;
    }
 
+   g_bt.SetRR(InpRR);
    int n = g_bt.Run();
    if(n == 0)
    {

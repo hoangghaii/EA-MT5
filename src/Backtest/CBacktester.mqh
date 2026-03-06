@@ -28,6 +28,7 @@ private:
    int          m_tradeCount;
    int          m_consecLosses;
    int          m_pausedSession; // -1 = not paused
+   double       m_rr;           // Risk-Reward ratio (TP = SL × m_rr)
 
    // Signal diagnostic counters (reset each Run())
    int          m_dBuf;   // CopyBuffer failed
@@ -46,6 +47,7 @@ private:
 
 public:
    bool Init(string symbol, int barsBack);
+   void SetRR(double rr) { m_rr = (rr > 0.1) ? rr : 2.0; }
    void Deinit();
    int  Run();
    bool GetTrade(int idx, VirtualTrade &t);
@@ -61,6 +63,7 @@ bool CBacktester::Init(string symbol, int barsBack)
    m_tradeCount    = 0;
    m_consecLosses  = 0;
    m_pausedSession = -1;
+   m_rr            = 2.0; // default RR; override with SetRR() before Run()
 
    // Wait for M3 history to be available from broker (up to 10s)
    int copied = 0;
@@ -151,7 +154,7 @@ int CBacktester::Run()
       cur.direction   = sigDir;
       cur.entry_price = m_ratesM3[i - 1].open;
       cur.sl          = cur.entry_price - sigDir * BT_SL_PTS * _Point;
-      cur.tp          = cur.entry_price + sigDir * BT_SL_PTS * _Point * 2; // RR 1:2
+      cur.tp          = cur.entry_price + sigDir * BT_SL_PTS * _Point * m_rr; // RR configurable
       cur.exit_price  = 0;
       cur.exit_time   = 0;
       cur.pnl         = 0;

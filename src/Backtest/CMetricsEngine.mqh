@@ -137,7 +137,7 @@ void CMetricsEngine::ExportCSV(string filename, VirtualTrade &trades[], int coun
                 DoubleToString(trades[i].sl,          _Digits),
                 DoubleToString(trades[i].tp,          _Digits),
                 DoubleToString(trades[i].exit_price,  _Digits),
-                DoubleToString(trades[i].pnl,         2),
+                DoubleToString(trades[i].pnl,         4),
                 trades[i].exit_reason);
    }
    FileClose(fh);
