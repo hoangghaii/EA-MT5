@@ -31,6 +31,8 @@ private:
    double       m_rr;           // Risk-Reward ratio (TP = SL × m_rr)
    double       m_lot;          // Lot size per trade
    bool         m_beStop;       // Break-even stop: move SL to entry at 1:1
+   int          m_pyramid;      // Max positions per signal (1=no pyramid)
+   int          m_pyrDelta;     // Points between pyramid entries
 
    // Signal diagnostic counters (reset each Run())
    int          m_dBuf;   // CopyBuffer failed
@@ -46,12 +48,14 @@ private:
    bool   _isSignal(int i, int &dir);
    double _calcPnL(int dir, double entry, double ex);
    bool   _detectExit(VirtualTrade &t, int idx);
+   int    _openPyramid(VirtualTrade &open[], int sigDir, int i);
 
 public:
    bool Init(string symbol, int barsBack);
-   void SetRR(double rr)     { m_rr     = (rr  > 0.1)  ? rr  : 2.0;  }
-   void SetLot(double lot)   { m_lot    = (lot > 0.001) ? lot : 0.01; }
-   void SetBEStop(bool b)    { m_beStop = b; }
+   void SetRR(double rr)     { m_rr      = (rr  > 0.1)  ? rr  : 2.0;  }
+   void SetLot(double lot)   { m_lot     = (lot > 0.001) ? lot : 0.01; }
+   void SetBEStop(bool b)    { m_beStop  = b; }
+   void SetPyramid(int n, int deltaPts=5) { m_pyramid=MathMax(1,MathMin(n,4)); m_pyrDelta=MathMax(1,deltaPts); }
    void Deinit();
    int  Run();
    bool GetTrade(int idx, VirtualTrade &t);
@@ -67,9 +71,11 @@ bool CBacktester::Init(string symbol, int barsBack)
    m_tradeCount    = 0;
    m_consecLosses  = 0;
    m_pausedSession = -1;
-   m_rr            = 2.0;   // default RR; override with SetRR() before Run()
-   m_lot           = 0.01;  // default lot; override with SetLot() before Run()
+   m_rr            = 2.0;   // default RR
+   m_lot           = 0.01;  // default lot
    m_beStop        = false; // default: no break-even stop
+   m_pyramid       = 1;     // default: single position
+   m_pyrDelta      = 5;     // default: 5 pts between pyramid entries
 
    // Wait for M3 history to be available from broker (up to 10s)
    int copied = 0;
@@ -124,55 +130,45 @@ int CBacktester::Run()
    int total = ArraySize(m_ratesM3);
    if(total < BT_WARMUP + 2) { Print("CBacktester::Run - insufficient bars"); return 0; }
 
-   bool         hasOpen = false;
-   VirtualTrade cur;
-   int          diagDow = 0, diagDD = 0, diagSig = 0;
-   m_dBuf = 0; m_dM15 = 0; m_dMacd = 0; m_dRsi = 0; m_dSlope = 0; // reset signal diag
+   VirtualTrade openList[];
+   int openCount = 0;
+   int diagDow = 0, diagDD = 0, diagSig = 0;
+   m_dBuf = 0; m_dM15 = 0; m_dMacd = 0; m_dRsi = 0; m_dSlope = 0;
 
    for(int i = total - 1; i >= 1; i--)
    {
       datetime barTime = m_ratesM3[i].time;
 
-      // Step 1: check exit on any open trade
-      if(hasOpen)
+      // Step 1: check exits on all open positions (reverse order for safe removal)
+      for(int k = openCount - 1; k >= 0; k--)
       {
-         if(_detectExit(cur, i))
+         if(_detectExit(openList[k], i))
          {
-            cur.exit_time = barTime;
-            cur.pnl       = _calcPnL(cur.direction, cur.entry_price, cur.exit_price);
+            openList[k].exit_time = barTime;
+            openList[k].pnl = _calcPnL(openList[k].direction, openList[k].entry_price, openList[k].exit_price);
             if(m_tradeCount >= ArraySize(m_trades)) ArrayResize(m_trades, m_tradeCount + 50);
-            m_trades[m_tradeCount++] = cur;
-            if(cur.pnl < 0.0) m_consecLosses++; else m_consecLosses = 0;
-            hasOpen = false;
+            m_trades[m_tradeCount++] = openList[k];
+            if(openList[k].pnl < 0.0) m_consecLosses++; else m_consecLosses = 0;
+            for(int j = k; j < openCount - 1; j++) openList[j] = openList[j + 1];
+            openCount--;
          }
-         continue; // 1 trade at a time — skip signal check while in trade
       }
+      if(openCount > 0) continue; // still in trade — skip signal
 
       if(i > total - BT_WARMUP)     continue; // warm-up guard
-      if(_isDowBlocked(barTime))     { diagDow++; continue; } // Mon/Fri filter
-      if(!_drawdownAllowed(barTime)) { diagDD++;  continue; } // 4-loss drawdown filter
+      if(_isDowBlocked(barTime))     { diagDow++; continue; }
+      if(!_drawdownAllowed(barTime)) { diagDD++;  continue; }
 
-      // Step 2: evaluate signal; enter at next bar open (no lookahead)
       int sigDir = 0;
       if(!_isSignal(i, sigDir)) { diagSig++; continue; }
-
-      cur.entry_time  = m_ratesM3[i - 1].time;
-      cur.direction   = sigDir;
-      cur.entry_price = m_ratesM3[i - 1].open;
-      cur.sl          = cur.entry_price - sigDir * BT_SL_PTS * _Point;
-      cur.tp          = cur.entry_price + sigDir * BT_SL_PTS * _Point * m_rr; // RR configurable
-      cur.exit_price  = 0;
-      cur.exit_time   = 0;
-      cur.pnl         = 0;
-      cur.exit_reason = "OPEN";
-      hasOpen         = true;
+      openCount = _openPyramid(openList, sigDir, i);
    }
 
-   // Preserve any trade still open at end of history
-   if(hasOpen)
+   // Preserve any positions still open at end of history
+   for(int k = 0; k < openCount; k++)
    {
       if(m_tradeCount >= ArraySize(m_trades)) ArrayResize(m_trades, m_tradeCount + 1);
-      m_trades[m_tradeCount++] = cur;
+      m_trades[m_tradeCount++] = openList[k];
    }
 
    PrintFormat("CBacktester::Run done: %d trades | bars=%d skip_dow=%d skip_dd=%d skip_signal=%d",

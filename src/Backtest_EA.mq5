@@ -13,6 +13,8 @@ input int    InpBarsBack  = 20000;                    // Bars to replay
 input double InpLotSize   = 0.01;                     // Lot size per trade
 input double InpRR        = 3.0;                      // Risk-Reward ratio (TP = SL × RR)
 input bool   InpBEStop    = true;                     // Break-even stop at 1:1 level
+input int    InpPyramid   = 1;                        // Max pyramid positions (1=off, 2-4)
+input int    InpPyrDelta  = 5;                        // Points between pyramid entries
 input string InpCsvFile   = "xauusd_backtest.csv";   // CSV output filename
 
 CBacktester   g_bt;
@@ -30,6 +32,7 @@ int OnInit()
    g_bt.SetLot(InpLotSize);
    g_bt.SetRR(InpRR);
    g_bt.SetBEStop(InpBEStop);
+   g_bt.SetPyramid(InpPyramid, InpPyrDelta);
    int n = g_bt.Run();
    if(n == 0)
    {

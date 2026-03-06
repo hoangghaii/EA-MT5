@@ -118,4 +118,35 @@ bool CBacktester::_detectExit(VirtualTrade &t, int idx)
    }
    return false;
 }
+
+//--- Open pyramid positions at signal bar[i]; returns count of positions opened
+int CBacktester::_openPyramid(VirtualTrade &open[], int sigDir, int i)
+{
+   double base  = m_ratesM3[i - 1].open;
+   double barHi = m_ratesM3[i - 1].high;
+   double barLo = m_ratesM3[i - 1].low;
+   int    cnt   = 0;
+   if(m_pyramid > ArraySize(open)) ArrayResize(open, m_pyramid);
+
+   for(int p = 0; p < m_pyramid; p++)
+   {
+      // BUY: add at progressively lower prices (better fill); SELL: higher
+      double e = base - sigDir * p * m_pyrDelta * _Point;
+      // p==0 always fills at bar open; p>0 requires bar to reach that level
+      bool reached = (p == 0) || ((sigDir == +1) ? (barLo <= e) : (barHi >= e));
+      if(!reached) break;
+
+      open[cnt].direction   = sigDir;
+      open[cnt].entry_time  = m_ratesM3[i - 1].time;
+      open[cnt].entry_price = e;
+      open[cnt].sl          = e - sigDir * BT_SL_PTS * _Point;
+      open[cnt].tp          = e + sigDir * BT_SL_PTS * _Point * m_rr;
+      open[cnt].exit_price  = 0;
+      open[cnt].exit_time   = 0;
+      open[cnt].pnl         = 0;
+      open[cnt].exit_reason = "OPEN";
+      cnt++;
+   }
+   return cnt;
+}
 //+------------------------------------------------------------------+
