@@ -38,14 +38,21 @@ bool CBacktester::_drawdownAllowed(datetime t)
 //--- Signal at bar[i]: MACD histogram flip + RSI + M15 EMA50 slope
 bool CBacktester::_isSignal(int i, int &dir)
 {
-   double hist[2], rsi[1], ema[2];
-   ArraySetAsSeries(hist, true);
-   ArraySetAsSeries(rsi,  true);
-   ArraySetAsSeries(ema,  true);
+   // MQL5 iMACD has only buffer 0 (MACD line) and buffer 1 (signal line)
+   // Histogram = MACD line - signal line (no separate buffer 2)
+   double macdLine[2], sigLine[2], rsi[1], ema[2];
+   ArraySetAsSeries(macdLine, true);
+   ArraySetAsSeries(sigLine,  true);
+   ArraySetAsSeries(rsi,      true);
+   ArraySetAsSeries(ema,      true);
 
-   // hist[0]=bar[i], hist[1]=bar[i+1] (1 bar earlier = previous)
-   if(CopyBuffer(m_macdH, 2, i, 2, hist) <= 0) { m_dBuf++; return false; }
-   if(CopyBuffer(m_rsiH,  0, i, 1, rsi)  <= 0) { m_dBuf++; return false; }
+   if(CopyBuffer(m_macdH, 0, i, 2, macdLine) <= 0) { m_dBuf++; return false; }
+   if(CopyBuffer(m_macdH, 1, i, 2, sigLine)  <= 0) { m_dBuf++; return false; }
+   if(CopyBuffer(m_rsiH,  0, i, 1, rsi)      <= 0) { m_dBuf++; return false; }
+
+   // hist[0]=current bar, hist[1]=previous bar
+   double hist0 = macdLine[0] - sigLine[0];
+   double hist1 = macdLine[1] - sigLine[1];
 
    // Map M3 bar time to corresponding M15 bar index for EMA offset
    int m15Idx = iBarShift(m_symbol, PERIOD_M15, m_ratesM3[i].time, false);
@@ -54,8 +61,8 @@ bool CBacktester::_isSignal(int i, int &dir)
 
    double slope = (ema[0] - ema[1]) / (_Point * 10); // pips/bar for XAUUSD
 
-   bool macdFlipBuy  = (hist[1] < 0.0 && hist[0] > 0.0);
-   bool macdFlipSell = (hist[1] > 0.0 && hist[0] < 0.0);
+   bool macdFlipBuy  = (hist1 < 0.0 && hist0 > 0.0);
+   bool macdFlipSell = (hist1 > 0.0 && hist0 < 0.0);
    if(!macdFlipBuy && !macdFlipSell) { m_dMacd++; return false; }
 
    // RSI check

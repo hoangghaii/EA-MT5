@@ -47,15 +47,22 @@ void CSignalEngine::Deinit()
    if(m_emaHandle  != INVALID_HANDLE) IndicatorRelease(m_emaHandle);
 }
 
-//--- Copy MACD histogram (buffer 2); request >= 3 elements
+//--- Compute MACD histogram: buffer0 (MACD line) - buffer1 (signal line)
+//    MQL5 iMACD has only buffer 0 (main) and buffer 1 (signal); no buffer 2
 bool CSignalEngine::_copyMACD(double &hist[], int count)
 {
-   ArraySetAsSeries(hist, true);
-   if(CopyBuffer(m_macdHandle, 2, 0, count, hist) <= 0) // 2 = histogram buffer
+   double macdLine[], sigLine[];
+   ArraySetAsSeries(macdLine, true);
+   ArraySetAsSeries(sigLine,  true);
+   ArraySetAsSeries(hist,     true);
+   if(CopyBuffer(m_macdHandle, 0, 0, count, macdLine) <= 0 ||
+      CopyBuffer(m_macdHandle, 1, 0, count, sigLine)  <= 0)
    {
       PrintFormat("CSignalEngine: CopyBuffer MACD failed, error=%d", GetLastError());
       return false;
    }
+   ArrayResize(hist, count);
+   for(int k = 0; k < count; k++) hist[k] = macdLine[k] - sigLine[k];
    return true;
 }
 
