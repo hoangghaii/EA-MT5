@@ -55,17 +55,39 @@ bool CBacktester::Init(string symbol, int barsBack)
    m_consecLosses  = 0;
    m_pausedSession = -1;
 
-   int copied = CopyRates(m_symbol, PERIOD_M3, 0, barsBack, m_ratesM3);
-   if(copied <= 0) { Print("CBacktester::Init - CopyRates failed"); return false; }
+   // Wait for M3 history to be available from broker (up to 10s)
+   int copied = 0;
+   for(int attempt = 0; attempt < 100 && copied < BT_WARMUP + 2; attempt++)
+   {
+      copied = CopyRates(m_symbol, PERIOD_M3, 0, barsBack, m_ratesM3);
+      if(copied >= BT_WARMUP + 2) break;
+      Sleep(100);
+   }
+   if(copied < BT_WARMUP + 2)
+   {
+      PrintFormat("CBacktester::Init - only %d M3 bars available (need %d). Open M3 chart first.", copied, BT_WARMUP + 2);
+      return false;
+   }
    ArraySetAsSeries(m_ratesM3, true);
 
-   // Create handles AFTER history loaded to avoid stale buffers (Phase 1 risk mitigation)
+   // Create indicator handles
    m_macdH = iMACD(m_symbol, PERIOD_M3,  12, 26, 9, PRICE_CLOSE);
    m_rsiH  = iRSI(m_symbol,  PERIOD_M3,  14, PRICE_CLOSE);
    m_emaH  = iMA(m_symbol,   PERIOD_M15, 50, 0, MODE_EMA, PRICE_CLOSE);
 
    if(m_macdH == INVALID_HANDLE || m_rsiH == INVALID_HANDLE || m_emaH == INVALID_HANDLE)
    { Print("CBacktester::Init - indicator handle failed"); return false; }
+
+   // Wait for indicator buffers to compute enough history (up to 10s)
+   for(int attempt = 0; attempt < 100; attempt++)
+   {
+      if(BarsCalculated(m_macdH) >= copied &&
+         BarsCalculated(m_rsiH)  >= copied &&
+         BarsCalculated(m_emaH)  >= copied) break;
+      Sleep(100);
+   }
+   PrintFormat("CBacktester::Init - BarsCalc: MACD=%d RSI=%d EMA=%d",
+               BarsCalculated(m_macdH), BarsCalculated(m_rsiH), BarsCalculated(m_emaH));
 
    ArrayResize(m_trades, barsBack / 10);
    PrintFormat("CBacktester::Init OK: %d M3 bars | symbol=%s", copied, symbol);
@@ -88,6 +110,7 @@ int CBacktester::Run()
 
    bool         hasOpen = false;
    VirtualTrade cur;
+   int          diagDow = 0, diagDD = 0, diagSig = 0; // diagnostic counters
 
    for(int i = total - 1; i >= 1; i--)
    {
@@ -109,12 +132,12 @@ int CBacktester::Run()
       }
 
       if(i > total - BT_WARMUP)     continue; // warm-up guard
-      if(_isDowBlocked(barTime))     continue; // Mon/Fri filter
-      if(!_drawdownAllowed(barTime)) continue; // 4-loss drawdown filter
+      if(_isDowBlocked(barTime))     { diagDow++; continue; } // Mon/Fri filter
+      if(!_drawdownAllowed(barTime)) { diagDD++;  continue; } // 4-loss drawdown filter
 
       // Step 2: evaluate signal; enter at next bar open (no lookahead)
       int sigDir = 0;
-      if(!_isSignal(i, sigDir)) continue;
+      if(!_isSignal(i, sigDir)) { diagSig++; continue; }
 
       cur.entry_time  = m_ratesM3[i - 1].time;
       cur.direction   = sigDir;
@@ -135,7 +158,8 @@ int CBacktester::Run()
       m_trades[m_tradeCount++] = cur;
    }
 
-   PrintFormat("CBacktester::Run done: %d trades from %d bars", m_tradeCount, total);
+   PrintFormat("CBacktester::Run done: %d trades | bars=%d skip_dow=%d skip_dd=%d skip_signal=%d",
+               m_tradeCount, total, diagDow, diagDD, diagSig);
    return m_tradeCount;
 }
 
