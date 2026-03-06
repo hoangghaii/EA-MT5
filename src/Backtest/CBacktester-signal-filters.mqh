@@ -44,20 +44,32 @@ bool CBacktester::_isSignal(int i, int &dir)
    ArraySetAsSeries(ema,  true);
 
    // hist[0]=bar[i], hist[1]=bar[i+1] (1 bar earlier = previous)
-   if(CopyBuffer(m_macdH, 2, i, 2, hist) <= 0) return false; // buffer 2 = histogram
-   if(CopyBuffer(m_rsiH,  0, i, 1, rsi)  <= 0) return false;
+   if(CopyBuffer(m_macdH, 2, i, 2, hist) <= 0) { m_dBuf++; return false; }
+   if(CopyBuffer(m_rsiH,  0, i, 1, rsi)  <= 0) { m_dBuf++; return false; }
 
    // Map M3 bar time to corresponding M15 bar index for EMA offset
    int m15Idx = iBarShift(m_symbol, PERIOD_M15, m_ratesM3[i].time, false);
-   if(m15Idx < 1) return false; // need 2 M15 bars to compute slope
-   if(CopyBuffer(m_emaH, 0, m15Idx, 2, ema) <= 0) return false;
+   if(m15Idx < 1) { m_dM15++; return false; }
+   if(CopyBuffer(m_emaH, 0, m15Idx, 2, ema) <= 0) { m_dBuf++; return false; }
 
    double slope = (ema[0] - ema[1]) / (_Point * 10); // pips/bar for XAUUSD
 
-   // Buy: hist flips neg→pos, RSI oversold, EMA uptrend
-   if(hist[1] < 0.0 && hist[0] > 0.0 && rsi[0] < 35.0 && slope > +0.1) { dir = +1; return true; }
-   // Sell: hist flips pos→neg, RSI overbought, EMA downtrend
-   if(hist[1] > 0.0 && hist[0] < 0.0 && rsi[0] > 65.0 && slope < -0.1) { dir = -1; return true; }
+   bool macdFlipBuy  = (hist[1] < 0.0 && hist[0] > 0.0);
+   bool macdFlipSell = (hist[1] > 0.0 && hist[0] < 0.0);
+   if(!macdFlipBuy && !macdFlipSell) { m_dMacd++; return false; }
+
+   // RSI check
+   bool rsiBuy  = (rsi[0] < 35.0);
+   bool rsiSell = (rsi[0] > 65.0);
+   if((macdFlipBuy && !rsiBuy) || (macdFlipSell && !rsiSell)) { m_dRsi++; return false; }
+
+   // Slope check
+   bool slopeBuy  = (slope > +0.1);
+   bool slopeSell = (slope < -0.1);
+   if((macdFlipBuy && !slopeBuy) || (macdFlipSell && !slopeSell)) { m_dSlope++; return false; }
+
+   if(macdFlipBuy  && rsiBuy  && slopeBuy)  { dir = +1; return true; }
+   if(macdFlipSell && rsiSell && slopeSell) { dir = -1; return true; }
    return false;
 }
 

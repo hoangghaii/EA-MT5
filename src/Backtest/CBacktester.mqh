@@ -29,6 +29,13 @@ private:
    int          m_consecLosses;
    int          m_pausedSession; // -1 = not paused
 
+   // Signal diagnostic counters (reset each Run())
+   int          m_dBuf;   // CopyBuffer failed
+   int          m_dM15;   // iBarShift M15 failed
+   int          m_dMacd;  // MACD flip absent
+   int          m_dRsi;   // RSI not in range
+   int          m_dSlope; // EMA slope insufficient
+
    // Implementations in CBacktester-signal-filters.mqh
    bool   _isDowBlocked(datetime t);
    int    _getSession(datetime t);
@@ -110,7 +117,8 @@ int CBacktester::Run()
 
    bool         hasOpen = false;
    VirtualTrade cur;
-   int          diagDow = 0, diagDD = 0, diagSig = 0; // diagnostic counters
+   int          diagDow = 0, diagDD = 0, diagSig = 0;
+   m_dBuf = 0; m_dM15 = 0; m_dMacd = 0; m_dRsi = 0; m_dSlope = 0; // reset signal diag
 
    for(int i = total - 1; i >= 1; i--)
    {
@@ -160,6 +168,8 @@ int CBacktester::Run()
 
    PrintFormat("CBacktester::Run done: %d trades | bars=%d skip_dow=%d skip_dd=%d skip_signal=%d",
                m_tradeCount, total, diagDow, diagDD, diagSig);
+   PrintFormat("  signal_diag: buf_fail=%d m15_fail=%d macd_noflip=%d rsi_fail=%d slope_fail=%d",
+               m_dBuf, m_dM15, m_dMacd, m_dRsi, m_dSlope);
    return m_tradeCount;
 }
 
