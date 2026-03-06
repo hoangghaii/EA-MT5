@@ -1,0 +1,61 @@
+//+------------------------------------------------------------------+
+//| Backtest_EA.mq5  - XAUUSD Scalper EA                            |
+//| Bar-replay backtest entry point for Strategy Tester              |
+//| Runs CBacktester in OnInit(), exposes OnTester() criterion       |
+//+------------------------------------------------------------------+
+#property copyright "XAUUSD Scalper EA"
+#property version   "1.00"
+#property strict
+
+#include "Backtest/CMetricsEngine.mqh"  // includes CBacktester.mqh transitively
+
+input int    InpBarsBack  = 20000;                    // Bars to replay
+input string InpCsvFile   = "xauusd_backtest.csv";   // CSV output filename
+
+CBacktester   g_bt;
+CMetricsEngine g_me;
+
+//--- Run full backtest at EA load; all results ready before OnTester()
+int OnInit()
+{
+   if(!g_bt.Init(_Symbol, InpBarsBack))
+   {
+      Print("Backtest_EA: CBacktester init failed");
+      return INIT_FAILED;
+   }
+
+   int n = g_bt.Run();
+   if(n == 0)
+   {
+      Print("Backtest_EA: no trades generated");
+      g_bt.Deinit();
+      return INIT_SUCCEEDED; // non-fatal: metrics will be zero
+   }
+
+   // Build trade array for metrics
+   VirtualTrade trades[];
+   ArrayResize(trades, n);
+   for(int i = 0; i < n; i++) g_bt.GetTrade(i, trades[i]);
+
+   g_me.Process(trades, n);
+   g_me.ExportCSV(InpCsvFile, trades, n);
+   g_me.PrintSummary();
+
+   return INIT_SUCCEEDED;
+}
+
+//--- Empty — backtest logic runs entirely in OnInit()
+void OnTick() { /* no live trading */ }
+
+//--- Returns profit factor as custom Strategy Tester optimization criterion
+double OnTester()
+{
+   return g_me.GetProfitFactor();
+}
+
+//--- Release indicator handles
+void OnDeinit(const int reason)
+{
+   g_bt.Deinit();
+}
+//+------------------------------------------------------------------+
